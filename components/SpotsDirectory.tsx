@@ -477,33 +477,17 @@ export const SpotsDirectory: React.FC<SpotsDirectoryProps> = ({
                   </div>
                 </div>
 
-                {/* Compact Card Content Body */}
+                {/* Compact Card Content Body - Clean & Simple */}
                 <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '6px', flex: 1 }}>
                   <div>
                     <h4 style={{ fontSize: '0.96rem', fontWeight: 700, color: '#fff', lineHeight: 1.3 }}>
                       {spot.name}
                     </h4>
 
-                    {/* Exact Location & Landmark Description */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', marginTop: '4px' }}>
-                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '4px', fontSize: '0.74rem', color: 'var(--text-secondary)' }}>
-                        <MapPin size={11} color="var(--rose-400)" style={{ flexShrink: 0, marginTop: '2px' }} />
-                        <span style={{ lineHeight: 1.3 }}>
-                          <strong style={{ color: '#fff' }}>{spot.neighborhood}:</strong> {spot.address}
-                        </span>
-                      </div>
-                      
-                      {/* Exact GPS Coordinates */}
-                      <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px', marginLeft: '15px' }}>
-                        <span>📍 GPS: {spot.lat.toFixed(4)}° N, {spot.lng.toFixed(4)}° E</span>
-                        <span>• ~{spot.avgCostForTwoETB} ETB for 2</span>
-                      </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.76rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                      <MapPin size={12} color="var(--rose-400)" style={{ flexShrink: 0 }} />
+                      <span>{spot.neighborhood}</span>
                     </div>
-                  </div>
-
-                  {/* Vibe / Signature Order */}
-                  <div style={{ fontSize: '0.74rem', color: 'var(--gold-400)', marginTop: '2px' }}>
-                    ⭐ Order: <span style={{ color: '#e2e8f0' }}>{spot.signatureOrder}</span>
                   </div>
 
                   {/* Action Buttons */}

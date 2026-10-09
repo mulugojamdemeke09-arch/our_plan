@@ -87,13 +87,43 @@ export const EventsExplorer: React.FC<EventsExplorerProps> = ({
           </p>
         </div>
 
-        <button
-          onClick={onOpenNewCustomEvent}
-          className="btn-secondary"
-          style={{ padding: '8px 16px', fontSize: '0.82rem' }}
-        >
-          <Plus size={15} /> Add Custom Event
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <button
+            onClick={async () => {
+              try {
+                await fetch('/api/events/sync', { method: 'POST' });
+                window.location.reload();
+              } catch (e) {
+                console.error(e);
+              }
+            }}
+            style={{
+              padding: '8px 14px',
+              fontSize: '0.78rem',
+              fontWeight: 700,
+              borderRadius: '10px',
+              backgroundColor: 'rgba(52, 211, 153, 0.15)',
+              border: '1px solid rgba(52, 211, 153, 0.4)',
+              color: '#34d399',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px'
+            }}
+            title="Real-time live weekend events schedule"
+          >
+            <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#10b981', boxShadow: '0 0 8px #10b981' }} />
+            <span>🔴 Live Real-Time Weekend Events</span>
+          </button>
+
+          <button
+            onClick={onOpenNewCustomEvent}
+            className="btn-secondary"
+            style={{ padding: '8px 16px', fontSize: '0.82rem' }}
+          >
+            <Plus size={15} /> Add Custom Event
+          </button>
+        </div>
       </div>
 
       {/* Search Input */}

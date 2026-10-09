@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
+import { ClerkWrapper } from '@/components/ClerkWrapper';
 
 export const metadata: Metadata = {
   title: 'Our Weekend • Weekend Date Planner for Couples in Addis Ababa',
@@ -57,7 +58,9 @@ export default function RootLayout({
           crossOrigin=""
         />
       </head>
-      <body>{children}</body>
+      <body>
+        <ClerkWrapper>{children}</ClerkWrapper>
+      </body>
     </html>
   );
 }

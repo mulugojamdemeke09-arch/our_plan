@@ -93,6 +93,8 @@ export interface DatePlan {
   reminderEnabled: boolean;
   reminderNotice: '1h' | '2h' | '1d' | 'friday_evening';
   createdAt: string;
+  coupleSpaceId?: string;
+  createdById?: string;
 }
 
 export interface CoupleProfile {

@@ -1,0 +1,182 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id              String        @id @default(cuid())
+  email           String        @unique
+  passwordHash    String
+  name            String
+  partnerNickname String?
+  avatar          String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  coupleSpaceId   String?
+  coupleSpace     CoupleSpace?  @relation(fields: [coupleSpaceId], references: [id], onDelete: SetNull)
+
+  notificationsReceived Notification[] @relation("ReceivedNotifications")
+  notificationsSent     Notification[] @relation("SentNotifications")
+}
+
+model CoupleSpace {
+  id              String         @id @default(cuid())
+  name            String         @default("Our Weekend Space")
+  inviteCode      String         @unique // e.g. "ADDIS-LOVE" or 6-digit code for partner linking
+  anniversaryDate String?
+  favoriteVibe    String?        @default("Romantic & Cozy Coffee Dates")
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  users           User[]
+  datePlans       DatePlan[]
+  notifications   Notification[]
+}
+
+model Notification {
+  id            String       @id @default(cuid())
+  coupleSpaceId String
+  coupleSpace   CoupleSpace  @relation(fields: [coupleSpaceId], references: [id], onDelete: Cascade)
+
+  actorId       String?
+  actor         User?        @relation("SentNotifications", fields: [actorId], references: [id], onDelete: SetNull)
+  actorName     String
+
+  recipientId   String?
+  recipient     User?        @relation("ReceivedNotifications", fields: [recipientId], references: [id], onDelete: SetNull)
+
+  title         String
+  message       String
+  type          String       // 'date_created' | 'date_updated' | 'date_deleted' | 'checklist_toggle' | 'partner_joined'
+  datePlanId    String?
+  read          Boolean      @default(false)
+  createdAt     DateTime     @default(now())
+}
+
+model CoupleProfile {
+  id              String     @id @default(cuid())
+  partner1Name    String     @default("Me")
+  partner2Name    String     @default("My Partner")
+  anniversaryDate String?
+  favoriteVibe    String?    @default("Romantic & Cozy Coffee Dates")
+  reminderChannel String?    @default("in_app")
+  clerkUserId     String?    @unique
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  datePlans       DatePlan[]
+}
+
+model Spot {
+  id                String         @id
+  name              String
+  category          String
+  subCategory       String?
+  knownCategory     String?
+  bestKnownFor      String?
+  neighborhood      String
+  address           String
+  lat               Float
+  lng               Float
+  priceLevel        String
+  avgCostForTwoETB  Int
+  vibe              String
+  romanticHighlight String
+  signatureOrder    String
+  openingHours      String
+  rating            Float          @default(4.8)
+  reviewCount       Int            @default(0)
+  image             String
+  interiorPhotos    String?        // JSON stringified string[]
+  interiorVibe      String?
+  menuHighlights    String?        // JSON stringified MenuItem[]
+  tags              String         // JSON stringified string[]
+  googleMapsUrl     String
+  appleMapsUrl      String?
+  phone             String?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  datePlanSpots     DatePlanSpot[]
+}
+
+model Event {
+  id                   String     @id
+  title                String
+  organizer            String
+  category             String
+  venue                String
+  neighborhood         String
+  dayOfWeek            String     // 'Friday Evening' | 'Saturday' | 'Sunday'
+  dateStr              String
+  time                 String
+  priceETB             String     // numeric string or "Free"
+  description          String
+  romanticReason       String
+  lat                  Float
+  lng                  Float
+  image                String
+  tags                 String     // JSON stringified string[]
+  recommendedDressCode String
+  autoUpdate           Boolean    @default(true)
+  dayOffset            Int        @default(0) // 0 for Friday, 1 for Saturday, 2 for Sunday
+  createdAt            DateTime   @default(now())
+  updatedAt            DateTime   @updatedAt
+  datePlans            DatePlan[]
+}
+
+model DatePlan {
+  id              String          @id @default(cuid())
+  title           String
+  targetDate      String          // YYYY-MM-DD
+  dayLabel        String?
+  time            String
+  timeSlot        String          // 'morning' | 'afternoon' | 'sunset' | 'dinner' | 'night'
+  proposedBy      String          @default("Me")
+  createdById     String?
+  status          String          @default("planned") // 'idea' | 'planned' | 'confirmed' | 'completed'
+  budgetETB       Int             @default(0)
+  dressCode       String          @default("Smart Casual")
+  notes           String          @default("")
+  reminderEnabled Boolean         @default(true)
+  reminderNotice  String          @default("2h")
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  coupleSpaceId   String?
+  coupleSpace     CoupleSpace?    @relation(fields: [coupleSpaceId], references: [id], onDelete: SetNull)
+
+  coupleProfileId String?
+  coupleProfile   CoupleProfile?  @relation(fields: [coupleProfileId], references: [id], onDelete: SetNull)
+
+  eventId         String?
+  event           Event?          @relation(fields: [eventId], references: [id], onDelete: SetNull)
+
+  spots           DatePlanSpot[]
+  checklist       ChecklistItem[]
+}
+
+model DatePlanSpot {
+  id         String   @id @default(cuid())
+  datePlanId String
+  spotId     String
+  order      Int      @default(0)
+
+  datePlan   DatePlan @relation(fields: [datePlanId], references: [id], onDelete: Cascade)
+  spot       Spot     @relation(fields: [spotId], references: [id], onDelete: Cascade)
+
+  @@unique([datePlanId, spotId])
+}
+
+model ChecklistItem {
+  id         String   @id @default(cuid())
+  datePlanId String
+  text       String
+  done       Boolean  @default(false)
+  order      Int      @default(0)
+
+  datePlan   DatePlan @relation(fields: [datePlanId], references: [id], onDelete: Cascade)
+}

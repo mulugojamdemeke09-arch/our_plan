@@ -459,18 +459,12 @@ export const InteractiveGoogleMap: React.FC<InteractiveGoogleMapProps> = ({
                 {currentSpot.name}
               </h4>
 
-              {/* Exact Location & Address */}
-              <div style={{ fontSize: '0.74rem', color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', gap: '2px', marginTop: '4px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <MapPin size={12} color="var(--rose-400)" />
-                  <strong style={{ color: '#fff' }}>Exact Location:</strong>
-                  <span>{currentSpot.address}</span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                  <span>📍 GPS: {currentSpot.lat.toFixed(4)}° N, {currentSpot.lng.toFixed(4)}° E</span>
-                  <span>• Order: <strong style={{ color: '#fde68a' }}>{currentSpot.signatureOrder}</strong></span>
-                  <span>• {currentSpot.priceLevel} (~{currentSpot.avgCostForTwoETB} ETB for 2)</span>
-                </div>
+              {/* Simple Location */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.76rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                <MapPin size={12} color="var(--rose-400)" />
+                <span>{currentSpot.neighborhood}</span>
+                <span>•</span>
+                <span>{currentSpot.priceLevel}</span>
               </div>
             </div>
 

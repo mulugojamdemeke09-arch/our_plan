@@ -1,6 +1,7 @@
 'use client';
 
 import { Heart, Bell, Plus, Clock, Sparkles, Calendar, Ticket, Compass } from 'lucide-react';
+import { CoupleAuthHeader } from './CoupleAuthHeader';
 
 interface NavbarProps {
   onOpenNewDate: () => void;
@@ -8,6 +9,15 @@ interface NavbarProps {
   hasUpcomingReminder?: boolean;
   activeTab: string;
   setActiveTab: (tab: any) => void;
+  partner1Name?: string;
+  partner2Name?: string;
+  onUpdateCoupleNames?: (p1: string, p2: string) => void;
+  currentUser?: any;
+  partner?: any;
+  coupleSpace?: any;
+  onAuthChange?: () => void;
+  unreadNotificationsCount?: number;
+  onOpenNotifications?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -15,7 +25,16 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenReminders,
   hasUpcomingReminder = true,
   activeTab,
-  setActiveTab
+  setActiveTab,
+  partner1Name = 'Me',
+  partner2Name = 'My Partner',
+  onUpdateCoupleNames,
+  currentUser,
+  partner,
+  coupleSpace,
+  onAuthChange = () => {},
+  unreadNotificationsCount = 0,
+  onOpenNotifications = () => {}
 }) => {
   return (
     <header
@@ -86,42 +105,74 @@ export const Navbar: React.FC<NavbarProps> = ({
         </div>
 
         {/* Right Actions: Compact & Mobile-Compatible */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
-          {/* Reminder Bell */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+          {/* Couple Account & Sync Badge */}
+          <div className="couple-badge-container">
+            <CoupleAuthHeader
+              currentUser={currentUser}
+              partner={partner}
+              coupleSpace={coupleSpace}
+              onAuthChange={onAuthChange}
+            />
+          </div>
+
+          {/* Couple Notifications Bell with unread badge */}
           <button
-            onClick={onOpenReminders}
+            onClick={onOpenNotifications}
             style={{
               position: 'relative',
               width: '38px',
               height: '38px',
               borderRadius: '10px',
-              backgroundColor: 'rgba(255, 255, 255, 0.06)',
-              border: '1px solid var(--border-subtle)',
+              backgroundColor: unreadNotificationsCount > 0 ? 'rgba(244, 63, 94, 0.15)' : 'rgba(255, 255, 255, 0.06)',
+              border: unreadNotificationsCount > 0 ? '1px solid rgba(244, 63, 94, 0.4)' : '1px solid var(--border-subtle)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              color: hasUpcomingReminder ? 'var(--gold-400)' : 'var(--text-secondary)',
+              color: unreadNotificationsCount > 0 ? 'var(--rose-400)' : 'var(--text-secondary)',
               cursor: 'pointer',
               transition: 'all 0.15s ease'
             }}
-            title="Weekend Date Reminders"
-            aria-label="View Date Reminders"
+            title={`Couple Notifications ${unreadNotificationsCount > 0 ? `(${unreadNotificationsCount} unread)` : ''}`}
+            aria-label="View Couple Notifications"
           >
             <Bell size={18} />
-            {hasUpcomingReminder && (
+            {unreadNotificationsCount > 0 ? (
+              <span
+                style={{
+                  position: 'absolute',
+                  top: '-3px',
+                  right: '-3px',
+                  minWidth: '18px',
+                  height: '18px',
+                  borderRadius: '999px',
+                  backgroundColor: '#f43f5e',
+                  color: '#fff',
+                  fontSize: '0.65rem',
+                  fontWeight: 800,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '0 4px',
+                  boxShadow: '0 0 10px rgba(244, 63, 94, 0.8)'
+                }}
+              >
+                {unreadNotificationsCount}
+              </span>
+            ) : hasUpcomingReminder ? (
               <span
                 style={{
                   position: 'absolute',
                   top: '6px',
                   right: '6px',
-                  width: '8px',
-                  height: '8px',
+                  width: '7px',
+                  height: '7px',
                   borderRadius: '50%',
                   backgroundColor: 'var(--gold-400)',
                   boxShadow: '0 0 8px var(--gold-400)'
                 }}
               />
-            )}
+            ) : null}
           </button>
 
           {/* New Date Button (+ Sign Only) */}

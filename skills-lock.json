@@ -1,6 +1,12 @@
 {
   "version": 1,
   "skills": {
+    "clerk-backend-api": {
+      "source": "clerk/skills",
+      "sourceType": "github",
+      "skillPath": "skills/clerk-backend-api/SKILL.md",
+      "computedHash": "f546f7a163670ff580271573e52e01f2a539fcbd6b3b2d6dd714656f60ee1a65"
+    },
     "entra-app-registration": {
       "source": "microsoft/azure-skills",
       "sourceType": "github",
@@ -12,6 +18,12 @@
       "sourceType": "github",
       "skillPath": "skills/event-planning-timeline/SKILL.md",
       "computedHash": "2daba7a9f2a351099d354323c6464acd2af6d94a3f0b0cdacf55bbcfeef4e31c"
+    },
+    "firebase-data-connect": {
+      "source": "firebase/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/firebase-data-connect-basics/SKILL.md",
+      "computedHash": "25e845ba0868d73eef4c4b7f1ad53dc4e6136ce158c44e9dfa57ce969795ea31"
     },
     "lark-approval": {
       "source": "open.feishu.cn",
@@ -208,6 +220,12 @@
       "sourceType": "well-known",
       "computedHash": "aa3abd39e90c8150a6d152d56a33da71e883baacde3e4a2bc51b5289fddcd8a2",
       "wellKnownDigest": "sha256:6f0c8cfb9e45f8c9ebc89946d4d02f816ced1d53fb0de4a08ecd8efd4f1cdefa"
+    },
+    "prisma-database-setup": {
+      "source": "prisma/skills",
+      "sourceType": "github",
+      "skillPath": "prisma-database-setup/SKILL.md",
+      "computedHash": "523066b1fe4b17a97d4f72f6190f8749815029a51a7e4fe190d8f74af1a8e74e"
     },
     "web-design-guidelines": {
       "source": "vercel-labs/agent-skills",

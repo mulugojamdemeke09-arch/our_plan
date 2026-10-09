@@ -35,9 +35,23 @@
 - **Add to iPhone Calendar (`.ics`)**: One-tap download opens native iOS Calendar on iPhone 12 with location, notes, and automatic 2-hour reminder alarms preset.
 - **Web Push Notifications**: Browser notification permissions and test alert support.
 
-### 6. 🗄️ Full-Stack Backend & Database
-- Next.js App Router API endpoints (`/api/dates`, `/api/events`, `/api/spots`, `/api/export-ics`).
-- Persistent storage in `data/db.json`.
+### 6. 🗄️ Full-Stack Backend & Prisma Database
+- **Prisma ORM with SQLite**: Fully typed relational schema storing:
+  - `Spot`: 76 romantic restaurants, coffee roasteries, and dessert spots.
+  - `Event`: 9 curated weekend events across Addis Ababa.
+  - `DatePlan`: Saturday & Sunday itineraries with status, budget in ETB, and dress code.
+  - `DatePlanSpot`: Many-to-many relation linking dates to multiple stops.
+  - `ChecklistItem`: Interactive couple preparation checklist items.
+  - `CoupleProfile`: Partner nicknames, anniversary dates, and preferences.
+- **Next.js App Router API endpoints**:
+  - `/api/dates`: Full CRUD (GET, POST, PUT, DELETE) synced with Prisma.
+  - `/api/spots`: Filter spots by category, subcity neighborhood, or search term.
+  - `/api/events`: Weekend event queries and custom event creation.
+  - `/api/profile`: Couple nickname and preference updates.
+  - `/api/export-ics`: Native iOS Calendar `.ics` generation with pre-set alarm triggers.
+- **Clerk Authentication Ready**:
+  - Middleware & ClerkProvider configured for multi-device couple sync.
+  - Add your keys in `.env` to enable cloud sign-in.
 
 ---
 
@@ -45,10 +59,26 @@
 
 The dev server is currently running at:
 ```bash
-http://localhost:3001
+http://localhost:3000
 ```
 
 To run it anytime:
 ```powershell
-npm.cmd run dev -- -p 3001
+npm.cmd run dev
 ```
+
+### 🗃️ Database Commands
+
+- **Open Visual Database GUI**:
+  ```powershell
+  npm.cmd run db:studio
+  ```
+- **Re-push Prisma Schema to SQLite**:
+  ```powershell
+  npm.cmd run db:push
+  ```
+- **Re-seed Initial Addis Spots & Events**:
+  ```powershell
+  npm.cmd run db:seed
+  ```
+

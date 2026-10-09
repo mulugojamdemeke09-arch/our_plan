@@ -13,6 +13,7 @@ import { NewDateModal } from '@/components/NewDateModal';
 import { ReminderModal } from '@/components/ReminderModal';
 import { CustomEventModal } from '@/components/CustomEventModal';
 import { SexyHeroSplit } from '@/components/SexyHeroSplit';
+import { NotificationDrawer, NotificationItem } from '@/components/NotificationDrawer';
 import { 
   Sparkles, 
   Calendar, 
@@ -25,7 +26,8 @@ import {
   Bell, 
   Download,
   CheckCircle2,
-  Clock
+  Clock,
+  X
 } from 'lucide-react';
 
 export default function HomePage() {
@@ -33,6 +35,18 @@ export default function HomePage() {
   const [spots, setSpots] = useState<DateSpot[]>([]);
   const [events, setEvents] = useState<AddisEvent[]>([]);
   const [profile, setProfile] = useState<CoupleProfile | null>(null);
+
+  // Couple Auth & Shared Space state
+  const [currentUser, setCurrentUser] = useState<any | null>(null);
+  const [partner, setPartner] = useState<any | null>(null);
+  const [coupleSpace, setCoupleSpace] = useState<any | null>(null);
+
+  // Real-time Couple Notifications state
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [unreadNotificationsCount, setUnreadNotificationsCount] = useState<number>(0);
+  const [isNotificationDrawerOpen, setIsNotificationDrawerOpen] = useState(false);
+  const [partnerToast, setPartnerToast] = useState<{ title: string; message: string } | null>(null);
+  const lastNotifIdRef = React.useRef<string | null>(null);
 
   const [activeTab, setActiveTab] = useState<'overview' | 'planner' | 'events' | 'spots' | 'reminders'>('overview');
 
@@ -74,8 +88,71 @@ export default function HomePage() {
     }
   };
 
+  // Fetch couple session and notifications
+  const fetchAuthAndNotifications = async () => {
+    try {
+      const res = await fetch('/api/auth/me');
+      const data = await res.json();
+
+      if (data.user) {
+        setCurrentUser(data.user);
+        setPartner(data.partner || null);
+        setCoupleSpace(data.coupleSpace || null);
+      } else {
+        setCurrentUser(null);
+        setPartner(null);
+        setCoupleSpace(data.coupleSpace || null);
+      }
+
+      if (data.notifications) {
+        const notifs: NotificationItem[] = data.notifications;
+        // If a new unread notification arrived from partner, show toast and auto-refresh dates
+        if (lastNotifIdRef.current && notifs.length > 0) {
+          const latest = notifs[0];
+          if (latest.id !== lastNotifIdRef.current && !latest.read) {
+            setPartnerToast({ title: latest.title, message: latest.message });
+            fetchData();
+            setTimeout(() => setPartnerToast(null), 5500);
+          }
+        }
+        if (notifs.length > 0) {
+          lastNotifIdRef.current = notifs[0].id;
+        }
+        setNotifications(notifs);
+        setUnreadNotificationsCount(data.unreadCount || 0);
+      }
+    } catch (err) {
+      console.error('Error fetching auth & notifications:', err);
+    }
+  };
+
+  // Real-time synchronization for dates, events and notifications
+  const syncRealtime = async () => {
+    try {
+      await fetchAuthAndNotifications();
+      const [datesRes, eventsRes] = await Promise.all([
+        fetch('/api/dates'),
+        fetch('/api/events')
+      ]);
+      const datesData = await datesRes.json();
+      const eventsData = await eventsRes.json();
+      if (datesData.dates) setDates(datesData.dates);
+      if (eventsData.events) setEvents(eventsData.events);
+    } catch (err) {
+      console.error('Real-time sync error:', err);
+    }
+  };
+
   useEffect(() => {
     fetchData();
+    fetchAuthAndNotifications();
+
+    // Polling interval (every 5 seconds for live real-time couple events & dates updates)
+    const interval = setInterval(() => {
+      syncRealtime();
+    }, 5000);
+
+    return () => clearInterval(interval);
   }, []);
 
   // Quick actions
@@ -112,6 +189,26 @@ export default function HomePage() {
     setIsNewDateModalOpen(true);
   };
 
+  const handleUpdateCoupleNames = async (p1: string, p2: string) => {
+    setProfile(prev => ({
+      partner1Name: p1,
+      partner2Name: p2,
+      favoriteVibe: prev?.favoriteVibe,
+      reminderChannel: prev?.reminderChannel,
+      anniversaryDate: prev?.anniversaryDate
+    }));
+
+    try {
+      await fetch('/api/profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ partner1Name: p1, partner2Name: p2 })
+      });
+    } catch (err) {
+      console.error('Failed to update couple profile:', err);
+    }
+  };
+
   const upcomingDate = dates.find(d => d.status !== 'completed') || dates[0];
 
   return (
@@ -133,10 +230,80 @@ export default function HomePage() {
         hasUpcomingReminder={dates.some(d => d.reminderEnabled && d.status !== 'completed')}
         activeTab={activeTab}
         setActiveTab={setActiveTab}
+        partner1Name={currentUser ? currentUser.name : (profile?.partner1Name || 'Me')}
+        partner2Name={partner ? partner.name : (profile?.partner2Name || 'Partner')}
+        onUpdateCoupleNames={handleUpdateCoupleNames}
+        currentUser={currentUser}
+        partner={partner}
+        coupleSpace={coupleSpace}
+        onAuthChange={() => {
+          fetchAuthAndNotifications();
+          fetchData();
+        }}
+        unreadNotificationsCount={unreadNotificationsCount}
+        onOpenNotifications={() => setIsNotificationDrawerOpen(true)}
       />
 
-        {/* Main Content Area */}
-        <main
+      {/* Real-time Partner Activity Floating Toast Alert */}
+      {partnerToast && (
+        <div
+          style={{
+            position: 'fixed',
+            top: '72px',
+            right: '18px',
+            zIndex: 9990,
+            maxWidth: '380px',
+            backgroundColor: 'rgba(17, 21, 34, 0.95)',
+            border: '1px solid rgba(244, 63, 94, 0.45)',
+            borderRadius: '16px',
+            boxShadow: '0 12px 35px rgba(0, 0, 0, 0.7), 0 0 20px rgba(244, 63, 94, 0.3)',
+            padding: '14px 18px',
+            backdropFilter: 'blur(16px)',
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: '12px',
+            animation: 'fadeInDown 0.3s ease-out'
+          }}
+        >
+          <div
+            style={{
+              width: '32px',
+              height: '32px',
+              borderRadius: '50%',
+              backgroundColor: 'rgba(244, 63, 94, 0.2)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0
+            }}
+          >
+            <Heart size={16} color="var(--rose-400)" fill="var(--rose-400)" />
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: '0.88rem', fontWeight: 800, color: '#fff', marginBottom: '2px' }}>
+              {partnerToast.title}
+            </div>
+            <div style={{ fontSize: '0.78rem', color: 'rgba(255, 255, 255, 0.8)', lineHeight: 1.35 }}>
+              {partnerToast.message}
+            </div>
+          </div>
+          <button
+            onClick={() => setPartnerToast(null)}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: 'rgba(255, 255, 255, 0.5)',
+              cursor: 'pointer',
+              padding: '2px'
+            }}
+          >
+            <X size={15} />
+          </button>
+        </div>
+      )}
+
+      {/* Main Content Area */}
+      <main
           style={{
             maxWidth: '1200px',
             width: '100%',
@@ -490,15 +657,12 @@ export default function HomePage() {
                               📸 Interior & Menu
                             </span>
                           </div>
-                          <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
+                          <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '6px', flex: 1 }}>
                             <div style={{ fontWeight: 700, fontSize: '0.94rem' }}>{spot.name}</div>
                             <div style={{ fontSize: '0.76rem', color: 'var(--text-secondary)' }}>
                               📍 {spot.neighborhood} • {spot.priceLevel}
                             </div>
-                            <div style={{ fontSize: '0.76rem', color: 'var(--gold-400)' }}>
-                              ⭐ Order: {spot.signatureOrder}
-                            </div>
-                            <div style={{ display: 'flex', gap: '6px', marginTop: 'auto' }}>
+                            <div style={{ display: 'flex', gap: '6px', marginTop: 'auto', paddingTop: '4px' }}>
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
@@ -540,7 +704,10 @@ export default function HomePage() {
               {activeTab === 'planner' && (
                 <DatePlanner
                   dates={dates}
-                  onRefresh={fetchData}
+                  onRefresh={() => {
+                    fetchData();
+                    fetchAuthAndNotifications();
+                  }}
                   onOpenNewDate={handleOpenNewDate}
                   onEditDate={handleEditDate}
                   onViewSpotDetail={handleOpenSpotDetail}
@@ -672,7 +839,10 @@ export default function HomePage() {
             setPreselectedSpot(null);
             setPreselectedEvent(null);
           }}
-          onSave={fetchData}
+          onSave={() => {
+            fetchData();
+            fetchAuthAndNotifications();
+          }}
           spots={spots}
           events={events}
           initialData={editingDate}
@@ -689,7 +859,10 @@ export default function HomePage() {
         <CustomEventModal
           isOpen={isCustomEventModalOpen}
           onClose={() => setIsCustomEventModalOpen(false)}
-          onCreated={fetchData}
+          onCreated={() => {
+            fetchData();
+            fetchAuthAndNotifications();
+          }}
         />
 
         {/* Global Spot Detail Modal (Photos, Interior, Menu) */}
@@ -701,6 +874,40 @@ export default function HomePage() {
             setSelectedSpotForDetail(null);
           }}
           onAddToDatePlan={handlePlanFromSpot}
+        />
+
+        {/* Real-time Couple Notifications Drawer */}
+        <NotificationDrawer
+          isOpen={isNotificationDrawerOpen}
+          onClose={() => setIsNotificationDrawerOpen(false)}
+          notifications={notifications}
+          onMarkAllRead={async () => {
+            try {
+              await fetch('/api/notifications', { method: 'POST' });
+              setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+              setUnreadNotificationsCount(0);
+            } catch (err) {
+              console.error(err);
+            }
+          }}
+          onMarkSingleRead={async (id: string) => {
+            try {
+              await fetch('/api/notifications', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ notificationId: id })
+              });
+              setNotifications(prev => prev.map(n => n.id === id ? ({ ...n, read: true }) : n));
+              setUnreadNotificationsCount(prev => Math.max(0, prev - 1));
+            } catch (err) {
+              console.error(err);
+            }
+          }}
+          onSelectDatePlan={(datePlanId: string) => {
+            setActiveTab('planner');
+            setIsNotificationDrawerOpen(false);
+          }}
+          partnerName={partner ? partner.name : (profile?.partner2Name || 'Partner')}
         />
     </div>
   );
