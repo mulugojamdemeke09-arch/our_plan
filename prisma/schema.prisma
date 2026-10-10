@@ -14,6 +14,7 @@ model User {
   name            String
   partnerNickname String?
   avatar          String?
+  emailVerified   Boolean       @default(false)
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
@@ -22,6 +23,14 @@ model User {
 
   notificationsReceived Notification[] @relation("ReceivedNotifications")
   notificationsSent     Notification[] @relation("SentNotifications")
+}
+
+model OtpVerification {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  code      String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
 }
 
 model CoupleSpace {

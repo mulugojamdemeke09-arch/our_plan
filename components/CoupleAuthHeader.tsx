@@ -16,7 +16,11 @@ import {
   X,
   Users,
   Share2,
-  Sparkles
+  Sparkles,
+  CheckCircle2,
+  AlertCircle,
+  RefreshCw,
+  Key
 } from 'lucide-react';
 
 interface UserData {
@@ -60,8 +64,13 @@ export const CoupleAuthHeader: React.FC<CoupleAuthHeaderProps> = ({
   const [regName, setRegName] = useState('');
   const [regEmail, setRegEmail] = useState('');
   const [regPassword, setRegPassword] = useState('');
+  const [regConfirmPassword, setRegConfirmPassword] = useState('');
   const [regInviteCode, setRegInviteCode] = useState('');
+  const [regStep, setRegStep] = useState<'form' | 'otp'>('form');
+  const [regOtpCode, setRegOtpCode] = useState('');
+  const [otpNotification, setOtpNotification] = useState<{ code: string; email: string } | null>(null);
   const [regError, setRegError] = useState('');
+  const [regSuccess, setRegSuccess] = useState('');
   const [regLoading, setRegLoading] = useState(false);
 
   // Copy code feedback
@@ -75,10 +84,12 @@ export const CoupleAuthHeader: React.FC<CoupleAuthHeaderProps> = ({
   }, []);
 
   const handleOpenModal = () => {
-    // If already logged in, show couple space; if not, show login
     setTab(currentUser ? 'profile' : 'login');
     setLoginError('');
     setRegError('');
+    setRegSuccess('');
+    setRegStep('form');
+    setRegOtpCode('');
     setIsOpen(true);
   };
 
@@ -102,6 +113,13 @@ export const CoupleAuthHeader: React.FC<CoupleAuthHeaderProps> = ({
       if (!res.ok) {
         throw new Error(data.error || 'Login failed');
       }
+
+      // Always remember account in localStorage
+      if (data.token) {
+        localStorage.setItem('our_weekend_couple_token', data.token);
+        localStorage.setItem('our_weekend_couple_user', JSON.stringify(data.user));
+      }
+
       onAuthChange();
       setIsOpen(false);
     } catch (err: any) {
@@ -111,15 +129,58 @@ export const CoupleAuthHeader: React.FC<CoupleAuthHeaderProps> = ({
     }
   };
 
-  const handleRegister = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // Step 1: Request OTP code to user's email
+  const handleRequestOtp = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setRegError('');
+    setRegSuccess('');
+
     if (!regName.trim() || !regEmail.trim() || !regPassword) {
-      setRegError('Name, email, and password are required');
+      setRegError('Please provide your name, email, and password.');
+      return;
+    }
+    if (regPassword.length < 6) {
+      setRegError('Password must be at least 6 characters long.');
+      return;
+    }
+    if (regPassword !== regConfirmPassword) {
+      setRegError('Passwords do not match. Please verify both passwords match.');
       return;
     }
 
     setRegLoading(true);
+    try {
+      const res = await fetch('/api/auth/send-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: regEmail.trim(), name: regName.trim() })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to dispatch verification code');
+      }
+
+      setOtpNotification({ code: data.otpPreview, email: regEmail.trim() });
+      setRegStep('otp');
+      setRegSuccess(`A 6-digit confirmation code has been dispatched to ${regEmail.trim()}!`);
+    } catch (err: any) {
+      setRegError(err.message || 'Failed to dispatch verification code');
+    } finally {
+      setRegLoading(false);
+    }
+  };
+
+  // Step 2: Verify OTP and complete account creation
+  const handleVerifyAndRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
     setRegError('');
+
+    if (!regOtpCode || regOtpCode.trim().length !== 6) {
+      setRegError('Please enter the 6-digit verification code.');
+      return;
+    }
+
+    setRegLoading(true);
     try {
       const res = await fetch('/api/auth/register', {
         method: 'POST',
@@ -128,6 +189,8 @@ export const CoupleAuthHeader: React.FC<CoupleAuthHeaderProps> = ({
           name: regName.trim(),
           email: regEmail.trim(),
           password: regPassword,
+          confirmPassword: regConfirmPassword,
+          otpCode: regOtpCode.trim(),
           inviteCode: regInviteCode.trim() || undefined
         })
       });
@@ -135,6 +198,13 @@ export const CoupleAuthHeader: React.FC<CoupleAuthHeaderProps> = ({
       if (!res.ok) {
         throw new Error(data.error || 'Registration failed');
       }
+
+      // Always remember account in localStorage
+      if (data.token) {
+        localStorage.setItem('our_weekend_couple_token', data.token);
+        localStorage.setItem('our_weekend_couple_user', JSON.stringify(data.user));
+      }
+
       onAuthChange();
       setIsOpen(false);
     } catch (err: any) {
@@ -147,6 +217,8 @@ export const CoupleAuthHeader: React.FC<CoupleAuthHeaderProps> = ({
   const handleLogout = async () => {
     try {
       await fetch('/api/auth/logout', { method: 'POST' });
+      localStorage.removeItem('our_weekend_couple_token');
+      localStorage.removeItem('our_weekend_couple_user');
       onAuthChange();
       setIsOpen(false);
     } catch (err) {
@@ -164,10 +236,6 @@ export const CoupleAuthHeader: React.FC<CoupleAuthHeaderProps> = ({
     const text = `Hey! Join our private couple date planner on Our Weekend Addis! 💕 Our Couple Code is: ${code}\n\nSign up and enter this code to connect with me in real time: ${typeof window !== 'undefined' ? window.location.origin : ''}`;
     const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
     window.open(url, '_blank');
-  };
-
-  const quickSwitchPartner = async (partnerEmail: string) => {
-    await handleLogin(partnerEmail, 'love123');
   };
 
   // Portal Modal Content attached directly to document.body
@@ -219,68 +287,67 @@ export const CoupleAuthHeader: React.FC<CoupleAuthHeaderProps> = ({
             position: 'absolute',
             top: '16px',
             right: '16px',
+            background: 'rgba(255, 255, 255, 0.08)',
+            border: 'none',
+            borderRadius: '50%',
             width: '32px',
             height: '32px',
-            borderRadius: '50%',
-            backgroundColor: 'rgba(255, 255, 255, 0.08)',
-            border: 'none',
-            color: 'rgba(255, 255, 255, 0.75)',
-            cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            transition: 'all 0.15s ease'
+            color: '#fff',
+            cursor: 'pointer'
           }}
-          title="Close modal"
-          aria-label="Close modal"
         >
           <X size={16} />
         </button>
 
         {/* Modal Header */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px', paddingRight: '32px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '18px' }}>
           <div
             style={{
-              width: '44px',
-              height: '44px',
-              borderRadius: '14px',
-              background: 'linear-gradient(135deg, #f43f5e, #be123c)',
+              width: '42px',
+              height: '42px',
+              borderRadius: '12px',
+              background: 'linear-gradient(135deg, #f43f5e 0%, #be123c 100%)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              boxShadow: '0 4px 16px rgba(244, 63, 94, 0.45)',
-              flexShrink: 0
+              boxShadow: '0 4px 14px rgba(244, 63, 94, 0.4)'
             }}
           >
-            <Heart size={22} fill="#fff" color="#fff" />
+            <Heart size={22} color="#fff" fill="#fff" />
           </div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <h3 style={{ fontSize: '1.20rem', fontWeight: 800, margin: 0, letterSpacing: '-0.02em', color: '#fff' }}>
-              {tab === 'login'
-                ? 'Couple Sign In'
-                : tab === 'register'
-                ? 'Create Couple Account'
-                : 'Our Couple Space'}
+          <div>
+            <h3 style={{ fontSize: '1.25rem', fontWeight: 800, margin: 0 }}>
+              {currentUser
+                ? `${coupleSpace?.name || 'Our Couple Space'}`
+                : tab === 'login'
+                ? 'Welcome Back'
+                : regStep === 'otp'
+                ? 'Verify Your Email'
+                : 'Create Couple Account'}
             </h3>
-            <p style={{ margin: '3px 0 0 0', fontSize: '0.78rem', color: 'rgba(255, 255, 255, 0.65)' }}>
-              {tab === 'login'
-                ? 'Sign in to plan dates together in real time'
-                : tab === 'register'
-                ? 'Create a shared space for you and your partner'
-                : `Connected with ${partner?.name || 'Waiting for partner to join'}`}
+            <p style={{ fontSize: '0.78rem', color: 'rgba(255, 255, 255, 0.6)', margin: 0 }}>
+              {currentUser
+                ? `Logged in as ${currentUser.name}`
+                : tab === 'login'
+                ? 'Sign in to access your shared plans'
+                : regStep === 'otp'
+                ? 'Enter the 6-digit code sent to your email'
+                : 'Create a shared space for you and your partner'}
             </p>
           </div>
         </div>
 
-        {/* Mode Switch Tabs */}
+        {/* Modal Navigation Tabs (Sign In / Create Account / My Space) */}
         <div
           style={{
             display: 'flex',
-            backgroundColor: 'rgba(255, 255, 255, 0.06)',
+            backgroundColor: 'rgba(255, 255, 255, 0.05)',
             borderRadius: '12px',
             padding: '3px',
-            marginBottom: '16px',
-            gap: '3px'
+            marginBottom: '16px'
           }}
         >
           <button
@@ -297,18 +364,14 @@ export const CoupleAuthHeader: React.FC<CoupleAuthHeaderProps> = ({
               fontSize: '0.78rem',
               cursor: 'pointer',
               transition: 'all 0.2s ease',
-              boxShadow: tab === 'login' ? '0 2px 8px rgba(244, 63, 94, 0.35)' : 'none',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '4px'
+              boxShadow: tab === 'login' ? '0 2px 8px rgba(244, 63, 94, 0.35)' : 'none'
             }}
           >
             Sign In
           </button>
           <button
             type="button"
-            onClick={() => { setTab('register'); setLoginError(''); setRegError(''); }}
+            onClick={() => { setTab('register'); setRegStep('form'); setLoginError(''); setRegError(''); }}
             style={{
               flex: 1,
               padding: '7px 8px',
@@ -362,7 +425,6 @@ export const CoupleAuthHeader: React.FC<CoupleAuthHeaderProps> = ({
             onSubmit={(e) => { e.preventDefault(); handleLogin(); }}
             style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}
           >
-            {/* Active user status hint */}
             {currentUser && (
               <div
                 style={{
@@ -488,7 +550,7 @@ export const CoupleAuthHeader: React.FC<CoupleAuthHeaderProps> = ({
               <ArrowRight size={15} />
             </button>
 
-            {/* Quick Demo Helper (Collapsible so real accounts take center stage) */}
+            {/* Quick Demo Helper */}
             <div style={{ marginTop: '4px', textAlign: 'center' }}>
               <button
                 type="button"
@@ -562,10 +624,8 @@ export const CoupleAuthHeader: React.FC<CoupleAuthHeaderProps> = ({
 
         {/* TAB 2: CREATE REAL ACCOUNT */}
         {tab === 'register' && (
-          <form
-            onSubmit={handleRegister}
-            style={{ display: 'flex', flexDirection: 'column', gap: '11px' }}
-          >
+          <div>
+            {/* Error Message Display */}
             {regError && (
               <div
                 style={{
@@ -574,347 +634,548 @@ export const CoupleAuthHeader: React.FC<CoupleAuthHeaderProps> = ({
                   backgroundColor: 'rgba(239, 68, 68, 0.15)',
                   border: '1px solid rgba(239, 68, 68, 0.35)',
                   color: '#f87171',
-                  fontSize: '0.76rem'
+                  fontSize: '0.76rem',
+                  marginBottom: '10px'
                 }}
               >
                 {regError}
               </div>
             )}
 
-            <div>
-              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'rgba(255, 255, 255, 0.75)', marginBottom: '4px' }}>
-                Your Name
-              </label>
-              <div style={{ position: 'relative' }}>
-                <input
-                  type="text"
-                  required
-                  value={regName}
-                  onChange={e => setRegName(e.target.value)}
-                  placeholder="e.g. Hanna or Dawit"
+            {/* Success / OTP Message Banner */}
+            {regSuccess && (
+              <div
+                style={{
+                  padding: '9px 12px',
+                  borderRadius: '9px',
+                  backgroundColor: 'rgba(52, 211, 153, 0.15)',
+                  border: '1px solid rgba(52, 211, 153, 0.35)',
+                  color: '#34d399',
+                  fontSize: '0.76rem',
+                  marginBottom: '10px'
+                }}
+              >
+                {regSuccess}
+              </div>
+            )}
+
+            {/* Live OTP Notification Card */}
+            {otpNotification && (
+              <div
+                style={{
+                  padding: '10px 14px',
+                  borderRadius: '12px',
+                  backgroundColor: 'rgba(244, 63, 94, 0.12)',
+                  border: '1px solid rgba(244, 63, 94, 0.35)',
+                  marginBottom: '14px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  boxShadow: '0 4px 15px rgba(244, 63, 94, 0.15)'
+                }}
+              >
+                <div>
+                  <div style={{ fontSize: '0.72rem', color: '#fecdd3', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                    <Mail size={12} /> Code sent to {otpNotification.email}:
+                  </div>
+                  <div style={{ fontSize: '1.2rem', fontWeight: 800, color: '#fff', letterSpacing: '0.15em' }}>
+                    {otpNotification.code}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setRegOtpCode(otpNotification.code)}
                   style={{
-                    width: '100%',
-                    padding: '8px 12px 8px 34px',
-                    borderRadius: '8px',
-                    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                    border: '1px solid rgba(255, 255, 255, 0.12)',
+                    backgroundColor: 'rgba(244, 63, 94, 0.3)',
+                    border: '1px solid #f43f5e',
                     color: '#fff',
-                    fontSize: '0.84rem',
-                    outline: 'none',
-                    boxSizing: 'border-box'
-                  }}
-                />
-                <User size={15} color="rgba(255, 255, 255, 0.4)" style={{ position: 'absolute', left: '11px', top: '50%', transform: 'translateY(-50%)' }} />
-              </div>
-            </div>
-
-            <div>
-              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'rgba(255, 255, 255, 0.75)', marginBottom: '4px' }}>
-                Email Address
-              </label>
-              <div style={{ position: 'relative' }}>
-                <input
-                  type="email"
-                  required
-                  value={regEmail}
-                  onChange={e => setRegEmail(e.target.value)}
-                  placeholder="you@gmail.com"
-                  style={{
-                    width: '100%',
-                    padding: '8px 12px 8px 34px',
                     borderRadius: '8px',
-                    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                    border: '1px solid rgba(255, 255, 255, 0.12)',
-                    color: '#fff',
-                    fontSize: '0.84rem',
-                    outline: 'none',
-                    boxSizing: 'border-box'
-                  }}
-                />
-                <Mail size={15} color="rgba(255, 255, 255, 0.4)" style={{ position: 'absolute', left: '11px', top: '50%', transform: 'translateY(-50%)' }} />
-              </div>
-            </div>
-
-            <div>
-              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'rgba(255, 255, 255, 0.75)', marginBottom: '4px' }}>
-                Password
-              </label>
-              <div style={{ position: 'relative' }}>
-                <input
-                  type="password"
-                  required
-                  value={regPassword}
-                  onChange={e => setRegPassword(e.target.value)}
-                  placeholder="••••••••"
-                  style={{
-                    width: '100%',
-                    padding: '8px 12px 8px 34px',
-                    borderRadius: '8px',
-                    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                    border: '1px solid rgba(255, 255, 255, 0.12)',
-                    color: '#fff',
-                    fontSize: '0.84rem',
-                    outline: 'none',
-                    boxSizing: 'border-box'
-                  }}
-                />
-                <Lock size={15} color="rgba(255, 255, 255, 0.4)" style={{ position: 'absolute', left: '11px', top: '50%', transform: 'translateY(-50%)' }} />
-              </div>
-            </div>
-
-            <div>
-              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'rgba(255, 255, 255, 0.75)', marginBottom: '4px' }}>
-                Partner&apos;s Couple Code (Optional)
-              </label>
-              <div style={{ position: 'relative' }}>
-                <input
-                  type="text"
-                  value={regInviteCode}
-                  onChange={e => setRegInviteCode(e.target.value.toUpperCase())}
-                  placeholder="Leave blank to generate a new space code"
-                  style={{
-                    width: '100%',
-                    padding: '8px 12px 8px 34px',
-                    borderRadius: '8px',
-                    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                    border: '1px solid rgba(255, 255, 255, 0.12)',
-                    color: '#fff',
-                    fontSize: '0.84rem',
-                    outline: 'none',
-                    letterSpacing: '0.04em',
-                    boxSizing: 'border-box'
-                  }}
-                />
-                <KeyRound size={15} color="var(--rose-400)" style={{ position: 'absolute', left: '11px', top: '50%', transform: 'translateY(-50%)' }} />
-              </div>
-              <span style={{ fontSize: '0.67rem', color: 'rgba(255, 255, 255, 0.45)', marginTop: '2px', display: 'block' }}>
-                If your partner already registered, enter their code here to pair up instantly!
-              </span>
-            </div>
-
-            <button
-              type="submit"
-              disabled={regLoading}
-              style={{
-                padding: '11px',
-                borderRadius: '10px',
-                background: 'linear-gradient(135deg, #f43f5e 0%, #be123c 100%)',
-                border: 'none',
-                color: '#fff',
-                fontWeight: 700,
-                fontSize: '0.88rem',
-                cursor: 'pointer',
-                boxShadow: '0 4px 16px rgba(244, 63, 94, 0.4)',
-                marginTop: '2px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '8px'
-              }}
-            >
-              {regLoading ? 'Creating Couple Space…' : 'Create Couple Space'}
-              <Check size={15} />
-            </button>
-
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '6px',
-                fontSize: '0.70rem',
-                color: '#34d399',
-                marginTop: '1px'
-              }}
-            >
-              <ShieldCheck size={12} />
-              <span>Real-time sync enabled for you &amp; your partner</span>
-            </div>
-          </form>
-        )}
-
-        {/* TAB 3: REAL COUPLE SPACE PROFILE */}
-        {tab === 'profile' && currentUser && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            <div
-              style={{
-                backgroundColor: 'rgba(255, 255, 255, 0.04)',
-                border: '1px solid rgba(255, 255, 255, 0.08)',
-                borderRadius: '12px',
-                padding: '12px',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '8px'
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span style={{ fontSize: '0.74rem', color: 'rgba(255, 255, 255, 0.5)' }}>My Account</span>
-                <span style={{ fontSize: '0.72rem', color: '#34d399', fontWeight: 600 }}>● Active &amp; Synced</span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <div
-                  style={{
-                    width: '36px',
-                    height: '36px',
-                    borderRadius: '50%',
-                    backgroundColor: 'rgba(244, 63, 94, 0.2)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: 'var(--rose-400)',
-                    fontWeight: 700
+                    padding: '5px 10px',
+                    fontSize: '0.72rem',
+                    fontWeight: 700,
+                    cursor: 'pointer'
                   }}
                 >
-                  {currentUser.name[0]}
-                </div>
-                <div>
-                  <div style={{ fontWeight: 700, fontSize: '0.90rem' }}>{currentUser.name}</div>
-                  <div style={{ fontSize: '0.74rem', color: 'rgba(255, 255, 255, 0.6)' }}>{currentUser.email}</div>
-                </div>
+                  Autofill Code
+                </button>
               </div>
-            </div>
+            )}
 
-            {/* Partner Connection Box */}
-            <div
-              style={{
-                backgroundColor: partner ? 'rgba(52, 211, 153, 0.08)' : 'rgba(251, 191, 36, 0.08)',
-                border: partner ? '1px solid rgba(52, 211, 153, 0.25)' : '1px solid rgba(251, 191, 36, 0.25)',
-                borderRadius: '12px',
-                padding: '12px',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '8px'
-              }}
-            >
-              <div style={{ fontSize: '0.76rem', color: partner ? '#34d399' : '#fbbf24', fontWeight: 700 }}>
-                {partner ? 'Connected Partner ❤️' : 'Invite Your Partner 💌'}
-              </div>
-
-              {partner ? (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <div
-                    style={{
-                      width: '34px',
-                      height: '34px',
-                      borderRadius: '50%',
-                      backgroundColor: 'rgba(52, 211, 153, 0.2)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      color: '#34d399',
-                      fontWeight: 700
-                    }}
-                  >
-                    {partner.name[0]}
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 700, fontSize: '0.90rem' }}>{partner.name}</div>
-                    <div style={{ fontSize: '0.74rem', color: 'rgba(255, 255, 255, 0.6)' }}>{partner.email}</div>
-                  </div>
-                  <span style={{ fontSize: '0.70rem', color: '#34d399', fontWeight: 600, backgroundColor: 'rgba(52, 211, 153, 0.15)', padding: '2px 8px', borderRadius: '6px' }}>
-                    Live Synced
-                  </span>
-                </div>
-              ) : (
+            {/* STEP 1: Registration Form with Password Confirmation */}
+            {regStep === 'form' ? (
+              <form
+                onSubmit={handleRequestOtp}
+                style={{ display: 'flex', flexDirection: 'column', gap: '11px' }}
+              >
                 <div>
-                  <p style={{ margin: '0 0 6px 0', fontSize: '0.76rem', color: 'rgba(255, 255, 255, 0.75)' }}>
-                    Share your code with your partner so they connect with you:
-                  </p>
-                  <div style={{ display: 'flex', gap: '6px', marginBottom: '8px' }}>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'rgba(255, 255, 255, 0.75)', marginBottom: '4px' }}>
+                    Your Name
+                  </label>
+                  <div style={{ position: 'relative' }}>
                     <input
-                      readOnly
-                      value={coupleSpace?.inviteCode || 'ADDIS-LOVE'}
+                      type="text"
+                      required
+                      value={regName}
+                      onChange={e => setRegName(e.target.value)}
+                      placeholder="e.g. Amen or Yohannes"
                       style={{
-                        flex: 1,
-                        padding: '7px 10px',
-                        borderRadius: '7px',
-                        backgroundColor: 'rgba(255, 255, 255, 0.06)',
-                        border: '1px solid rgba(255, 255, 255, 0.15)',
+                        width: '100%',
+                        padding: '8px 12px 8px 34px',
+                        borderRadius: '8px',
+                        backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                        border: '1px solid rgba(255, 255, 255, 0.12)',
                         color: '#fff',
-                        fontWeight: 700,
-                        letterSpacing: '0.05em',
                         fontSize: '0.84rem',
+                        outline: 'none',
                         boxSizing: 'border-box'
                       }}
                     />
-                    <button
-                      type="button"
-                      onClick={() => handleCopyCode(coupleSpace?.inviteCode || 'ADDIS-LOVE')}
-                      className="btn-secondary"
-                      style={{ padding: '7px 10px', fontSize: '0.76rem' }}
-                    >
-                      {copiedCode ? <Check size={14} color="#34d399" /> : <Copy size={14} />}
-                      {copiedCode ? 'Copied' : 'Copy'}
-                    </button>
+                    <User size={15} color="rgba(255, 255, 255, 0.4)" style={{ position: 'absolute', left: '11px', top: '50%', transform: 'translateY(-50%)' }} />
                   </div>
+                </div>
 
-                  {/* Direct WhatsApp Share Button */}
-                  <button
-                    type="button"
-                    onClick={() => handleShareWhatsApp(coupleSpace?.inviteCode || 'ADDIS-LOVE')}
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'rgba(255, 255, 255, 0.75)', marginBottom: '4px' }}>
+                    Email Address
+                  </label>
+                  <div style={{ position: 'relative' }}>
+                    <input
+                      type="email"
+                      required
+                      value={regEmail}
+                      onChange={e => setRegEmail(e.target.value)}
+                      placeholder="amendemeke09@gmail.com"
+                      style={{
+                        width: '100%',
+                        padding: '8px 12px 8px 34px',
+                        borderRadius: '8px',
+                        backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                        border: '1px solid rgba(255, 255, 255, 0.12)',
+                        color: '#fff',
+                        fontSize: '0.84rem',
+                        outline: 'none',
+                        boxSizing: 'border-box'
+                      }}
+                    />
+                    <Mail size={15} color="rgba(255, 255, 255, 0.4)" style={{ position: 'absolute', left: '11px', top: '50%', transform: 'translateY(-50%)' }} />
+                  </div>
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'rgba(255, 255, 255, 0.75)', marginBottom: '4px' }}>
+                    Password
+                  </label>
+                  <div style={{ position: 'relative' }}>
+                    <input
+                      type="password"
+                      required
+                      value={regPassword}
+                      onChange={e => setRegPassword(e.target.value)}
+                      placeholder="••••••••"
+                      style={{
+                        width: '100%',
+                        padding: '8px 12px 8px 34px',
+                        borderRadius: '8px',
+                        backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                        border: '1px solid rgba(255, 255, 255, 0.12)',
+                        color: '#fff',
+                        fontSize: '0.84rem',
+                        outline: 'none',
+                        boxSizing: 'border-box'
+                      }}
+                    />
+                    <Lock size={15} color="rgba(255, 255, 255, 0.4)" style={{ position: 'absolute', left: '11px', top: '50%', transform: 'translateY(-50%)' }} />
+                  </div>
+                </div>
+
+                {/* Confirm Password Field */}
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                    <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'rgba(255, 255, 255, 0.75)' }}>
+                      Confirm Password
+                    </label>
+                    {regConfirmPassword && (
+                      <span
+                        style={{
+                          fontSize: '0.68rem',
+                          fontWeight: 700,
+                          color: regPassword === regConfirmPassword ? '#34d399' : '#f87171',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '3px'
+                        }}
+                      >
+                        {regPassword === regConfirmPassword ? (
+                          <>
+                            <CheckCircle2 size={11} /> Passwords match
+                          </>
+                        ) : (
+                          <>
+                            <AlertCircle size={11} /> Passwords do not match
+                          </>
+                        )}
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ position: 'relative' }}>
+                    <input
+                      type="password"
+                      required
+                      value={regConfirmPassword}
+                      onChange={e => setRegConfirmPassword(e.target.value)}
+                      placeholder="Re-enter password"
+                      style={{
+                        width: '100%',
+                        padding: '8px 12px 8px 34px',
+                        borderRadius: '8px',
+                        backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                        border: regConfirmPassword
+                          ? regPassword === regConfirmPassword
+                            ? '1px solid rgba(52, 211, 153, 0.5)'
+                            : '1px solid rgba(239, 68, 68, 0.5)'
+                          : '1px solid rgba(255, 255, 255, 0.12)',
+                        color: '#fff',
+                        fontSize: '0.84rem',
+                        outline: 'none',
+                        boxSizing: 'border-box'
+                      }}
+                    />
+                    <Key size={15} color="rgba(255, 255, 255, 0.4)" style={{ position: 'absolute', left: '11px', top: '50%', transform: 'translateY(-50%)' }} />
+                  </div>
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'rgba(255, 255, 255, 0.75)', marginBottom: '4px' }}>
+                    Partner&apos;s Couple Code (Optional)
+                  </label>
+                  <div style={{ position: 'relative' }}>
+                    <input
+                      type="text"
+                      value={regInviteCode}
+                      onChange={e => setRegInviteCode(e.target.value.toUpperCase())}
+                      placeholder="Leave blank to generate a new space code"
+                      style={{
+                        width: '100%',
+                        padding: '8px 12px 8px 34px',
+                        borderRadius: '8px',
+                        backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                        border: '1px solid rgba(255, 255, 255, 0.12)',
+                        color: '#fff',
+                        fontSize: '0.84rem',
+                        outline: 'none',
+                        letterSpacing: '0.04em',
+                        boxSizing: 'border-box'
+                      }}
+                    />
+                    <KeyRound size={15} color="var(--rose-400)" style={{ position: 'absolute', left: '11px', top: '50%', transform: 'translateY(-50%)' }} />
+                  </div>
+                  <span style={{ fontSize: '0.67rem', color: 'rgba(255, 255, 255, 0.45)', marginTop: '2px', display: 'block' }}>
+                    If your partner already registered, enter their code here to pair up instantly!
+                  </span>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={regLoading}
+                  style={{
+                    padding: '11px',
+                    borderRadius: '10px',
+                    background: 'linear-gradient(135deg, #f43f5e 0%, #be123c 100%)',
+                    border: 'none',
+                    color: '#fff',
+                    fontWeight: 700,
+                    fontSize: '0.88rem',
+                    cursor: 'pointer',
+                    boxShadow: '0 4px 16px rgba(244, 63, 94, 0.4)',
+                    marginTop: '2px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px'
+                  }}
+                >
+                  {regLoading ? 'Sending Verification Code…' : 'Send Email Verification Code (OTP) 📩'}
+                  <ArrowRight size={15} />
+                </button>
+
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '6px',
+                    fontSize: '0.70rem',
+                    color: '#34d399',
+                    marginTop: '1px'
+                  }}
+                >
+                  <ShieldCheck size={12} />
+                  <span>Real-time sync enabled • Secure email verification</span>
+                </div>
+              </form>
+            ) : (
+              /* STEP 2: Enter Verification Code (OTP) */
+              <form
+                onSubmit={handleVerifyAndRegister}
+                style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}
+              >
+                <div style={{ textAlign: 'center', padding: '6px 0' }}>
+                  <div style={{ fontSize: '0.82rem', color: 'rgba(255, 255, 255, 0.85)', marginBottom: '4px' }}>
+                    Enter the 6-digit confirmation code sent to:
+                  </div>
+                  <div style={{ fontSize: '0.88rem', fontWeight: 700, color: '#f43f5e' }}>
+                    {regEmail}
+                  </div>
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'rgba(255, 255, 255, 0.75)', marginBottom: '6px', textAlign: 'center' }}>
+                    6-Digit Verification Code
+                  </label>
+                  <input
+                    type="text"
+                    maxLength={6}
+                    required
+                    value={regOtpCode}
+                    onChange={e => setRegOtpCode(e.target.value.replace(/\D/g, ''))}
+                    placeholder="123456"
                     style={{
                       width: '100%',
-                      padding: '7px',
-                      borderRadius: '7px',
-                      backgroundColor: 'rgba(37, 211, 102, 0.18)',
-                      border: '1px solid rgba(37, 211, 102, 0.35)',
-                      color: '#25D366',
+                      padding: '12px',
+                      borderRadius: '12px',
+                      backgroundColor: 'rgba(255, 255, 255, 0.07)',
+                      border: '2px solid rgba(244, 63, 94, 0.5)',
+                      color: '#fff',
+                      fontSize: '1.4rem',
+                      fontWeight: 800,
+                      textAlign: 'center',
+                      letterSpacing: '0.3em',
+                      outline: 'none',
+                      boxSizing: 'border-box'
+                    }}
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={regLoading}
+                  style={{
+                    padding: '12px',
+                    borderRadius: '10px',
+                    background: 'linear-gradient(135deg, #f43f5e 0%, #be123c 100%)',
+                    border: 'none',
+                    color: '#fff',
+                    fontWeight: 700,
+                    fontSize: '0.88rem',
+                    cursor: 'pointer',
+                    boxShadow: '0 4px 16px rgba(244, 63, 94, 0.4)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px'
+                  }}
+                >
+                  {regLoading ? 'Verifying & Creating…' : 'Verify & Create Couple Space ✨'}
+                  <Check size={16} />
+                </button>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px' }}>
+                  <button
+                    type="button"
+                    onClick={() => handleRequestOtp()}
+                    disabled={regLoading}
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      color: '#38bdf8',
+                      fontSize: '0.75rem',
                       fontWeight: 600,
-                      fontSize: '0.76rem',
                       cursor: 'pointer',
                       display: 'flex',
                       alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '6px'
+                      gap: '4px'
                     }}
                   >
-                    <Share2 size={13} /> Send Invite via WhatsApp
+                    <RefreshCw size={12} /> Resend Code
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => { setRegStep('form'); setRegError(''); }}
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      color: 'rgba(255, 255, 255, 0.5)',
+                      fontSize: '0.75rem',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    ← Edit Details
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        )}
+
+        {/* TAB 3: COUPLE SPACE PROFILE */}
+        {tab === 'profile' && currentUser && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            <div
+              style={{
+                backgroundColor: 'rgba(244, 63, 94, 0.08)',
+                border: '1px solid rgba(244, 63, 94, 0.25)',
+                borderRadius: '14px',
+                padding: '14px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '8px'
+              }}
+            >
+              <div style={{ fontSize: '0.74rem', color: '#fecdd3', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 700 }}>
+                Your Private Couple Code
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: '1.25rem', fontWeight: 800, letterSpacing: '0.06em', color: '#fff' }}>
+                  {coupleSpace?.inviteCode || 'ADDIS-LOVE'}
+                </span>
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  <button
+                    onClick={() => handleCopyCode(coupleSpace?.inviteCode || 'ADDIS-LOVE')}
+                    style={{
+                      padding: '6px 10px',
+                      borderRadius: '8px',
+                      backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                      border: '1px solid rgba(255, 255, 255, 0.2)',
+                      color: '#fff',
+                      fontSize: '0.74rem',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px'
+                    }}
+                  >
+                    {copiedCode ? <Check size={13} color="#34d399" /> : <Copy size={13} />}
+                    {copiedCode ? 'Copied!' : 'Copy Code'}
+                  </button>
+                  <button
+                    onClick={() => handleShareWhatsApp(coupleSpace?.inviteCode || 'ADDIS-LOVE')}
+                    style={{
+                      padding: '6px 10px',
+                      borderRadius: '8px',
+                      backgroundColor: '#25D366',
+                      border: 'none',
+                      color: '#fff',
+                      fontSize: '0.74rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px'
+                    }}
+                    title="Share directly via WhatsApp"
+                  >
+                    <Share2 size={13} />
+                    WhatsApp
+                  </button>
+                </div>
+              </div>
+              <p style={{ fontSize: '0.74rem', color: 'rgba(255, 255, 255, 0.6)', margin: 0 }}>
+                Send this code to your partner so both of your phones and laptops sync dates and notifications in real time!
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'rgba(255, 255, 255, 0.7)' }}>
+                Couples in this space:
+              </div>
+
+              {/* Current user */}
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px',
+                  padding: '9px 12px',
+                  borderRadius: '10px',
+                  backgroundColor: 'rgba(255, 255, 255, 0.04)',
+                  border: '1px solid rgba(255, 255, 255, 0.08)'
+                }}
+              >
+                <div style={{ width: '32px', height: '32px', borderRadius: '50%', backgroundColor: 'var(--rose-500)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: '0.85rem' }}>
+                  {currentUser.name[0]}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: '0.84rem', fontWeight: 700 }}>
+                    {currentUser.name} <span style={{ fontSize: '0.68rem', color: 'var(--rose-400)', fontWeight: 600 }}>(You)</span>
+                  </div>
+                  <div style={{ fontSize: '0.72rem', color: 'rgba(255, 255, 255, 0.5)' }}>{currentUser.email}</div>
+                </div>
+                <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#10b981' }} />
+              </div>
+
+              {/* Partner */}
+              {partner ? (
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                    padding: '9px 12px',
+                    borderRadius: '10px',
+                    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+                    border: '1px solid rgba(255, 255, 255, 0.08)'
+                  }}
+                >
+                  <div style={{ width: '32px', height: '32px', borderRadius: '50%', backgroundColor: '#8b5cf6', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: '0.85rem' }}>
+                    {partner.name[0]}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: '0.84rem', fontWeight: 700 }}>
+                      {partner.name} <span style={{ fontSize: '0.68rem', color: '#a78bfa', fontWeight: 600 }}>(Partner 💕)</span>
+                    </div>
+                    <div style={{ fontSize: '0.72rem', color: 'rgba(255, 255, 255, 0.5)' }}>{partner.email}</div>
+                  </div>
+                  <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#10b981' }} />
+                </div>
+              ) : (
+                <div
+                  style={{
+                    padding: '12px',
+                    borderRadius: '10px',
+                    backgroundColor: 'rgba(255, 255, 255, 0.02)',
+                    border: '1px dashed rgba(255, 255, 255, 0.15)',
+                    textAlign: 'center',
+                    fontSize: '0.75rem',
+                    color: 'rgba(255, 255, 255, 0.5)'
+                  }}
+                >
+                  No partner connected yet. Share your code above!
                 </div>
               )}
             </div>
 
-            {/* Footer Buttons */}
-            <div style={{ display: 'flex', gap: '7px', marginTop: '3px' }}>
-              <button
-                type="button"
-                onClick={() => setIsOpen(false)}
-                style={{
-                  flex: 1,
-                  padding: '9px',
-                  borderRadius: '9px',
-                  backgroundColor: 'transparent',
-                  border: '1px solid rgba(255, 255, 255, 0.12)',
-                  color: 'rgba(255, 255, 255, 0.7)',
-                  fontWeight: 600,
-                  fontSize: '0.82rem',
-                  cursor: 'pointer'
-                }}
-              >
-                Close
-              </button>
-              <button
-                type="button"
-                onClick={handleLogout}
-                style={{
-                  flex: 1,
-                  padding: '9px',
-                  borderRadius: '9px',
-                  backgroundColor: 'rgba(239, 68, 68, 0.15)',
-                  border: '1px solid rgba(239, 68, 68, 0.3)',
-                  color: '#f87171',
-                  fontWeight: 600,
-                  fontSize: '0.82rem',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '6px'
-                }}
-              >
-                <LogOut size={15} /> Sign Out
-              </button>
-            </div>
+            <button
+              onClick={handleLogout}
+              style={{
+                width: '100%',
+                padding: '9px',
+                borderRadius: '10px',
+                backgroundColor: 'rgba(255, 255, 255, 0.06)',
+                border: '1px solid rgba(255, 255, 255, 0.15)',
+                color: '#fff',
+                fontSize: '0.8rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '6px',
+                marginTop: '6px'
+              }}
+            >
+              <LogOut size={14} /> Log Out
+            </button>
           </div>
         )}
       </div>
@@ -924,87 +1185,52 @@ export const CoupleAuthHeader: React.FC<CoupleAuthHeaderProps> = ({
 
   return (
     <>
-      {/* Top Navbar Couple Pill Button */}
       <button
         onClick={handleOpenModal}
         style={{
-          display: 'inline-flex',
+          display: 'flex',
           alignItems: 'center',
           gap: '8px',
           padding: '6px 14px',
           borderRadius: '999px',
-          backgroundColor: currentUser ? 'rgba(244, 63, 94, 0.16)' : 'rgba(255, 255, 255, 0.08)',
-          border: currentUser ? '1px solid rgba(244, 63, 94, 0.45)' : '1px solid rgba(255, 255, 255, 0.2)',
+          backgroundColor: currentUser ? 'rgba(244, 63, 94, 0.18)' : 'rgba(255, 255, 255, 0.07)',
+          border: currentUser ? '1px solid rgba(244, 63, 94, 0.45)' : '1px solid rgba(255, 255, 255, 0.15)',
           color: '#fff',
           cursor: 'pointer',
+          transition: 'all 0.2s ease',
           fontSize: '0.82rem',
-          fontWeight: 700,
-          transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
-          backdropFilter: 'blur(10px)',
-          maxWidth: '260px',
-          boxShadow: currentUser ? '0 0 14px rgba(244, 63, 94, 0.25)' : 'none'
+          fontWeight: 600
         }}
-        title="Click to view Couple Account & Shared Space"
-        aria-label="Couple Login and Sync Account"
+        title={currentUser ? `Logged in as ${currentUser.name}` : 'Sign in or create couple account'}
       >
-        <span
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            width: '22px',
-            height: '22px',
-            borderRadius: '50%',
-            background: currentUser
-              ? 'linear-gradient(135deg, #f43f5e, #be123c)'
-              : 'rgba(255, 255, 255, 0.22)',
-            boxShadow: currentUser ? '0 2px 8px rgba(244, 63, 94, 0.5)' : 'none',
-            flexShrink: 0
-          }}
-        >
-          <Heart size={12} fill="#fff" color="#fff" />
+        <span style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+          <Heart size={14} color="var(--rose-400)" fill={currentUser ? 'var(--rose-400)' : 'transparent'} />
+          {currentUser && (
+            <span
+              style={{
+                position: 'absolute',
+                top: '-2px',
+                right: '-2px',
+                width: '6px',
+                height: '6px',
+                borderRadius: '50%',
+                backgroundColor: '#10b981'
+              }}
+            />
+          )}
         </span>
-
-        <span
-          style={{
-            color: 'var(--text-main)',
-            letterSpacing: '-0.01em',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap'
-          }}
-        >
-          {currentUser
-            ? `${currentUser.name} 💖 ${partner ? partner.name : 'Waiting Partner'}`
-            : 'Couple Sign In / Sign Up'}
+        <span>
+          {currentUser ? (
+            <>
+              <strong>{currentUser.name}</strong>
+              {partner ? ` & ${partner.name}` : ' (Waiting for partner)'}
+            </>
+          ) : (
+            'Sign In / Pair Up'
+          )}
         </span>
-
-        {currentUser ? (
-          <span
-            style={{
-              width: '8px',
-              height: '8px',
-              borderRadius: '50%',
-              backgroundColor: partner ? '#34d399' : '#fbbf24',
-              boxShadow: partner ? '0 0 8px #34d399' : '0 0 8px #fbbf24',
-              flexShrink: 0
-            }}
-            title={partner ? 'Connected with partner' : 'Waiting for partner'}
-          />
-        ) : (
-          <span
-            style={{
-              width: '7px',
-              height: '7px',
-              borderRadius: '50%',
-              backgroundColor: 'var(--rose-400)',
-              flexShrink: 0
-            }}
-          />
-        )}
       </button>
 
-      {/* Render the portal into document.body */}
       {modalPortal}
     </>
   );

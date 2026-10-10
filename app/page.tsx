@@ -98,7 +98,13 @@ export default function HomePage() {
   // Fetch couple session and notifications
   const fetchAuthAndNotifications = async () => {
     try {
-      const res = await fetch('/api/auth/me');
+      const token = typeof window !== 'undefined' ? localStorage.getItem('our_weekend_couple_token') : null;
+      const headers: Record<string, string> = {};
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      const res = await fetch('/api/auth/me', { headers });
       const data = await res.json();
 
       if (data.user) {
