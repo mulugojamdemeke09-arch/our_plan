@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getPrismaEvents, createPrismaEvent } from '@/lib/db';
 import { autoUpdateWeekendEvents, createCoupleNotification } from '@/lib/notifications';
+import { filterActiveUpcomingEvents } from '@/lib/event-timing';
 import { getUserFromReq } from '@/lib/auth';
 import { AddisEvent } from '@/lib/types';
 
@@ -13,7 +14,8 @@ export async function GET(req: Request) {
     const category = searchParams.get('category') || undefined;
     const query = searchParams.get('q')?.toLowerCase() || undefined;
 
-    const events = await getPrismaEvents(category, query);
+    const rawEvents = await getPrismaEvents(category, query);
+    const events = filterActiveUpcomingEvents(rawEvents, new Date());
     return NextResponse.json({ events });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });

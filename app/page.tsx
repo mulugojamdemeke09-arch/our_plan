@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { DatePlan, DateSpot, AddisEvent, CoupleProfile } from '@/lib/types';
+import { filterActiveUpcomingEvents, getLiveEventTimingBadge } from '@/lib/event-timing';
 import { Navbar } from '@/components/Navbar';
 import { BottomNav } from '@/components/BottomNav';
 import { WeekendCountdown } from '@/components/WeekendCountdown';
@@ -35,6 +36,12 @@ export default function HomePage() {
   const [spots, setSpots] = useState<DateSpot[]>([]);
   const [events, setEvents] = useState<AddisEvent[]>([]);
   const [profile, setProfile] = useState<CoupleProfile | null>(null);
+  const [currentTime, setCurrentTime] = useState<Date>(new Date());
+
+  // Filter out past events in real-time (e.g. Friday 3:00 drops at 3:01)
+  const activeEvents = useMemo(() => {
+    return filterActiveUpcomingEvents(events, currentTime);
+  }, [events, currentTime]);
 
   // Couple Auth & Shared Space state
   const [currentUser, setCurrentUser] = useState<any | null>(null);
@@ -152,7 +159,15 @@ export default function HomePage() {
       syncRealtime();
     }, 5000);
 
-    return () => clearInterval(interval);
+    // Live clock ticker (every 1 second to expire past events in real-time)
+    const clockInterval = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+
+    return () => {
+      clearInterval(interval);
+      clearInterval(clockInterval);
+    };
   }, []);
 
   // Quick actions
@@ -527,57 +542,76 @@ export default function HomePage() {
                         gap: '14px'
                       }}
                     >
-                      {events.slice(0, 3).map(evt => (
-                        <div
-                          key={evt.id}
-                          className="glass-panel"
-                          style={{
-                            borderRadius: '14px',
-                            overflow: 'hidden',
-                            display: 'flex',
-                            flexDirection: 'column'
-                          }}
-                        >
-                          <div
-                            style={{
-                              height: '110px',
-                              backgroundImage: `url(${evt.image})`,
-                              backgroundSize: 'cover',
-                              backgroundPosition: 'center',
-                              position: 'relative'
-                            }}
-                          >
-                            <span
-                              className="badge-rose"
-                              style={{ position: 'absolute', bottom: '8px', left: '10px', fontSize: '0.68rem' }}
-                            >
-                              {evt.dateStr}
-                            </span>
-                          </div>
-                          <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
-                            <div style={{ fontWeight: 700, fontSize: '0.94rem' }}>{evt.title}</div>
-                            <div style={{ fontSize: '0.76rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                              <MapPin size={12} color="var(--rose-400)" />
-                              {evt.venue} ({evt.neighborhood})
-                            </div>
-                            <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', lineHeight: 1.3 }}>
-                              {evt.description.slice(0, 85)}…
-                            </p>
-                            <button
-                              onClick={() => handlePlanFromEvent(evt)}
-                              className="btn-secondary"
+                      {activeEvents.length === 0 ? (
+                        <div className="glass-panel" style={{ padding: '24px', gridColumn: '1 / -1', textAlign: 'center' }}>
+                          <p style={{ color: 'var(--text-secondary)', fontSize: '0.86rem' }}>
+                            All events for this time have concluded. Next upcoming Addis experiences sync dynamically!
+                          </p>
+                        </div>
+                      ) : (
+                        activeEvents.slice(0, 3).map(evt => {
+                          const timingBadge = getLiveEventTimingBadge(evt, currentTime);
+                          return (
+                            <div
+                              key={evt.id}
+                              className="glass-panel"
                               style={{
-                                marginTop: 'auto',
-                                padding: '7px',
-                                fontSize: '0.76rem',
-                                width: '100%'
+                                borderRadius: '14px',
+                                overflow: 'hidden',
+                                display: 'flex',
+                                flexDirection: 'column'
                               }}
                             >
-                              Plan Date For This
-                            </button>
-                          </div>
-                        </div>
-                      ))}
+                              <div
+                                style={{
+                                  height: '110px',
+                                  backgroundImage: `url(${evt.image})`,
+                                  backgroundSize: 'cover',
+                                  backgroundPosition: 'center',
+                                  position: 'relative'
+                                }}
+                              >
+                                <span
+                                  className="badge-rose"
+                                  style={{
+                                    position: 'absolute',
+                                    bottom: '8px',
+                                    left: '10px',
+                                    fontSize: '0.68rem',
+                                    backgroundColor: timingBadge.isSoon ? 'rgba(244, 63, 94, 0.4)' : undefined,
+                                    border: timingBadge.isSoon ? '1px solid #f43f5e' : undefined
+                                  }}
+                                >
+                                  <Clock size={11} style={{ display: 'inline', marginRight: '3px' }} />
+                                  {timingBadge.label}
+                                </span>
+                              </div>
+                              <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
+                                <div style={{ fontWeight: 700, fontSize: '0.94rem' }}>{evt.title}</div>
+                                <div style={{ fontSize: '0.76rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                  <MapPin size={12} color="var(--rose-400)" />
+                                  {evt.venue} ({evt.neighborhood})
+                                </div>
+                                <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', lineHeight: 1.3 }}>
+                                  {evt.description.slice(0, 85)}…
+                                </p>
+                                <button
+                                  onClick={() => handlePlanFromEvent(evt)}
+                                  className="btn-secondary"
+                                  style={{
+                                    marginTop: 'auto',
+                                    padding: '7px',
+                                    fontSize: '0.76rem',
+                                    width: '100%'
+                                  }}
+                                >
+                                  Plan Date For This
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
                     </div>
                   </div>
 
@@ -717,7 +751,7 @@ export default function HomePage() {
               {/* TAB 3: ADDIS EVENTS */}
               {activeTab === 'events' && (
                 <EventsExplorer
-                  events={events}
+                  events={activeEvents}
                   onPlanDateFromEvent={handlePlanFromEvent}
                   onOpenNewCustomEvent={() => setIsCustomEventModalOpen(true)}
                 />
